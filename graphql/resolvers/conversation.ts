@@ -4,14 +4,14 @@ import lodash from "lodash";
 
 import {
   ConversationCreatedResponse,
-  GetConversationResponse,
+  GetConversationsResponse,
   GraphQLContext,
   RetrieveConversationResponse,
   Participant,
 } from "../types";
 import { ERROR_STATUS, handleResolverError } from "../handle-errors";
 
-import { convertRawData } from "../../utils/helpers";
+import { checkUserInConversation, convertRawData } from "../../utils/helpers";
 
 import { SUB_EVENT_NAME } from "../constants";
 
@@ -21,7 +21,7 @@ const resolvers = {
       _: any,
       __: any,
       context: GraphQLContext
-    ): Promise<GetConversationResponse> => {
+    ): Promise<GetConversationsResponse> => {
       if (!context.session) handleResolverError(ERROR_STATUS.UNAUTHENTICATED);
 
       const { session, prisma } = context;
@@ -33,7 +33,7 @@ const resolvers = {
             {
               $match: {
                 messages: {
-                  $ne: [],
+                  $exists: true,
                 },
                 $expr: {
                   $in: [{ $oid: currentUser.id }, "$participantIds"],
@@ -84,7 +84,7 @@ const resolvers = {
         inputs: { conversationId, offset, limit },
       }: { inputs: { conversationId: string; offset: number; limit: number } },
       context: GraphQLContext
-    ): Promise<Message> => {
+    ): Promise<Message[]> => {
       if (!context.session) handleResolverError(ERROR_STATUS.UNAUTHENTICATED);
 
       const { session, prisma } = context;
@@ -123,8 +123,9 @@ const resolvers = {
         });
 
         const conversationMessage = convertRawData(rawConversationMessage);
+        const messages = conversationMessage?.[0]?.messages;
 
-        return conversationMessage?.[0]?.messages;
+        return messages ? messages : [];
       } catch (error) {
         handleResolverError(ERROR_STATUS.INTERNAL_SERVER);
       }
@@ -160,6 +161,7 @@ const resolvers = {
                 image: true,
               },
             },
+            name: true,
             image: true,
             userHaveSeen: true,
             createdBy: true,
@@ -181,11 +183,13 @@ const resolvers = {
     ): Promise<ConversationCreatedResponse> => {
       if (!context?.session) handleResolverError(ERROR_STATUS.UNAUTHENTICATED);
 
-      const { session, prisma, pubSub } = context;
+      const { session, prisma } = context;
       const currentUser = session.user;
 
       const createConversationAction: {
-        [condition: string]: (listId: string[]) => any;
+        [condition: string]: (
+          listId: string[]
+        ) => Promise<ConversationCreatedResponse>;
       } = {
         ["TRUE"]: async (listId: string[]) => {
           const _conversation = await prisma.conversation.create({
@@ -205,7 +209,9 @@ const resolvers = {
                   image: true,
                 },
               },
+              name: true,
               image: true,
+              userHaveSeen: true,
               createdBy: true,
             },
           });
@@ -229,7 +235,9 @@ const resolvers = {
                   image: true,
                 },
               },
+              name: true,
               image: true,
+              userHaveSeen: true,
               createdBy: true,
             },
           });
@@ -254,7 +262,9 @@ const resolvers = {
                   image: true,
                 },
               },
+              name: true,
               image: true,
+              userHaveSeen: true,
               createdBy: true,
             },
           });
@@ -271,7 +281,7 @@ const resolvers = {
         });
 
       try {
-        const participantIds = lodash.clone(listUserId);
+        const participantIds = lodash.cloneDeep(listUserId);
 
         participantIds.push(currentUser.id);
 
@@ -296,7 +306,7 @@ const resolvers = {
         };
       },
       context: GraphQLContext
-    ): Promise<Boolean> => {
+    ): Promise<boolean> => {
       if (!context?.session) handleResolverError(ERROR_STATUS.UNAUTHENTICATED);
 
       const { session, prisma, pubSub } = context;
@@ -347,6 +357,7 @@ const resolvers = {
               },
             },
             messages: true,
+            name: true,
             image: true,
             userHaveSeen: true,
             createdBy: true,
@@ -367,9 +378,50 @@ const resolvers = {
             id: conversationAddedMessage.id,
             participants: conversationAddedMessage.participants,
             lastMessage: newMessage,
+            name: conversationAddedMessage.name,
             image: conversationAddedMessage.image,
             userHaveSeen: conversationAddedMessage.userHaveSeen,
             createdBy: conversationAddedMessage.createdBy,
+          },
+        });
+
+        return true;
+      } catch (error) {
+        handleResolverError(ERROR_STATUS.INTERNAL_SERVER);
+      }
+
+      return false;
+    },
+    markReadConversation: async (
+      _: any,
+      { conversationId }: { conversationId: string },
+      context: GraphQLContext
+    ): Promise<boolean> => {
+      if (!context?.session) handleResolverError(ERROR_STATUS.UNAUTHENTICATED);
+
+      const { session, prisma } = context;
+      const currentUser = session.user;
+      const isParticipant = await checkUserInConversation(
+        conversationId,
+        context
+      );
+
+      if (!isParticipant)
+        handleResolverError({
+          message: "You are not member of conversation!",
+          code: "FORBIDDEN",
+          status: 403,
+        });
+
+      try {
+        await prisma.conversation.update({
+          where: {
+            id: conversationId,
+          },
+          data: {
+            userHaveSeen: {
+              push: currentUser.id,
+            },
           },
         });
 

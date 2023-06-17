@@ -8,6 +8,7 @@ const typeDefs = `#graphql
     type Mutation {
         createConversation(listUserId: [String]!): ConversationCreatedResponse
         sendMessage(inputs: SendMessageInput!): Boolean
+        markReadConversation(conversationId: String!): Boolean
     }
 
     type Subscription {
@@ -54,6 +55,7 @@ const typeDefs = `#graphql
         id: String
         participants: [Participant]
         lastMessage: Message
+        name: String
         image: String
         userHaveSeen: [String]
         createdBy: String
@@ -62,6 +64,7 @@ const typeDefs = `#graphql
     type RetrieveConversationResponse {
         id: String
         participants: [Participant]
+        name: String
         image: String
         userHaveSeen: [String]
         createdBy: String
@@ -71,6 +74,7 @@ const typeDefs = `#graphql
         id: String
         participantIds: [String]
         participants: [Participant]
+        name: String
         image: String
         createdBy: String
     }
@@ -79,6 +83,7 @@ const typeDefs = `#graphql
         id: String
         participants: [Participant]
         lastMessage: Message
+        name: String
         image: String
         userHaveSeen: [String]
         createdBy: String

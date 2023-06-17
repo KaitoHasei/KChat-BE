@@ -1,5 +1,27 @@
 import { ObjectId } from "mongodb";
 import _ from "lodash";
+import { GraphQLContext } from "../graphql";
+
+export const checkUserInConversation = async (
+  conversationId: string,
+  context: GraphQLContext
+): Promise<boolean> => {
+  const { session, prisma } = context;
+  const currentUser = session.user;
+  const findUserInConversation = await prisma.conversation.findUnique({
+    where: {
+      id: conversationId,
+      participantIds: {
+        has: currentUser?.id,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return findUserInConversation ? true : false;
+};
 
 export const convertRawData = (data: any): any => {
   if (_.isArray(data)) {

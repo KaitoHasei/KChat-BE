@@ -51,6 +51,7 @@ export interface ConversationCreatedResponse {
   id: string;
   participantIds: string[];
   participants: Participant[];
+  name: string;
   image: string;
   createdBy: string;
 }
@@ -58,15 +59,17 @@ export interface ConversationCreatedResponse {
 export interface RetrieveConversationResponse {
   id: string;
   participants: Participant[];
+  name: string;
   image: string;
   userHaveSeen: string[];
   createdBy: string;
 }
 
-export interface GetConversationResponse {
+export interface GetConversationsResponse {
   id: string;
   participants: Participant[];
   lastMessage: Message;
+  name: string;
   image: string;
   userHaveSeen: string[];
   createdBy: string;
