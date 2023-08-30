@@ -1,14 +1,14 @@
-import { GraphQLContext, SearchUserResponse, SuccessResponse } from "../types";
-import { ERROR_STATUS, handleResolverError } from "../handle-errors";
+import { ErrorCode, handleResolverError } from "../handle-errors";
+import { GraphQLContext, Response, User } from "../../types";
 
 const resolvers = {
   Query: {
     searchUsers: async (
       _: any,
-      args: { searchTerms: string },
+      { searchTerms }: { searchTerms: string },
       context: GraphQLContext
-    ): Promise<SearchUserResponse> => {
-      if (!context?.session) handleResolverError(ERROR_STATUS.UNAUTHENTICATED);
+    ): Promise<User[]> => {
+      if (!context?.session) handleResolverError(ErrorCode.UNAUTHENTICATED);
 
       const commonStrings = [
         ".com",
@@ -22,17 +22,15 @@ const resolvers = {
         "gmail",
       ];
 
-      const { searchTerms } = args;
-
       if (commonStrings.includes(searchTerms) || !searchTerms.trim())
         handleResolverError({
           message: "Invalid search terms",
           code: "BAD_REQUEST",
-          status: ERROR_STATUS.BAD_REQUEST,
+          status: ErrorCode.BAD_REQUEST,
         });
 
       const { session, prisma } = context;
-      const currentUser = session?.user;
+      const user = session?.user;
 
       try {
         const users = await prisma.user.findMany({
@@ -42,43 +40,39 @@ const resolvers = {
               { name: { contains: searchTerms } },
             ],
             NOT: {
-              id: currentUser.id,
+              id: user.id,
             },
           },
         });
 
-        return {
-          users,
-        };
+        return users;
       } catch (error) {
-        handleResolverError(ERROR_STATUS.INTERNAL_SERVER);
+        handleResolverError(ErrorCode.INTERNAL_SERVER);
       }
     },
   },
   Mutation: {
     changeUserName: async (
       _: any,
-      args: { userName: string },
+      { userName }: { userName: string },
       context: GraphQLContext
-    ): Promise<SuccessResponse> => {
-      if (!context?.session) handleResolverError(ERROR_STATUS.UNAUTHENTICATED);
-
-      const { userName } = args;
+    ): Promise<Response> => {
+      if (!context?.session) handleResolverError(ErrorCode.UNAUTHENTICATED);
 
       if (!userName.trim())
         handleResolverError({
           message: "Invalid username",
           code: "BAD_REQUEST",
-          status: ERROR_STATUS.BAD_REQUEST,
+          status: ErrorCode.BAD_REQUEST,
         });
 
       const { session, prisma } = context;
-      const currentUser = session?.user;
+      const user = session?.user;
 
       try {
         await prisma.user.update({
           where: {
-            id: currentUser?.id,
+            id: user.id,
           },
           data: {
             name: userName,
@@ -86,10 +80,11 @@ const resolvers = {
         });
 
         return {
+          success: true,
           message: "Update username success!",
         };
       } catch (error) {
-        handleResolverError(ERROR_STATUS.INTERNAL_SERVER);
+        handleResolverError(ErrorCode.INTERNAL_SERVER);
       }
     },
   },

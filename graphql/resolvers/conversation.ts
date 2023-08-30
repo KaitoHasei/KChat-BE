@@ -1,15 +1,16 @@
-import { Message } from "@prisma/client";
 import { withFilter } from "graphql-subscriptions";
 import lodash from "lodash";
 
+import { ErrorCode, handleResolverError } from "../handle-errors";
+
 import {
-  ConversationCreatedResponse,
+  Response,
+  Message,
+  Conversation,
   GetConversationsResponse,
+  CreateConversationResponse,
   GraphQLContext,
-  RetrieveConversationResponse,
-  Participant,
-} from "../types";
-import { ERROR_STATUS, handleResolverError } from "../handle-errors";
+} from "../../types";
 
 import { checkUserInConversation, convertRawData } from "../../utils/helpers";
 
@@ -21,11 +22,11 @@ const resolvers = {
       _: any,
       __: any,
       context: GraphQLContext
-    ): Promise<GetConversationsResponse> => {
-      if (!context.session) handleResolverError(ERROR_STATUS.UNAUTHENTICATED);
+    ): Promise<GetConversationsResponse[]> => {
+      if (!context.session) handleResolverError(ErrorCode.UNAUTHENTICATED);
 
       const { session, prisma } = context;
-      const { user: currentUser } = session;
+      const user = session.user;
 
       try {
         const rawConversations = await prisma.conversation.aggregateRaw({
@@ -36,11 +37,11 @@ const resolvers = {
                   $exists: true,
                 },
                 $expr: {
-                  $in: [{ $oid: currentUser.id }, "$participantIds"],
+                  $in: [{ $oid: user.id }, "$participantIds"],
                 },
               },
             },
-            { $addFields: { lastMessage: { $last: "$messages" } } },
+            { $addFields: { latestMessage: { $last: "$messages" } } },
             {
               $lookup: {
                 from: "User",
@@ -74,35 +75,27 @@ const resolvers = {
 
         return conversations;
       } catch (error) {
-        handleResolverError(ERROR_STATUS.INTERNAL_SERVER);
+        handleResolverError(ErrorCode.INTERNAL_SERVER);
       }
     },
 
     getConversationMessages: async (
       _: any,
       {
-        inputs: { conversationId, offset, limit },
+        inputs: { conversationId, offset = 0, limit = 10 },
       }: { inputs: { conversationId: string; offset: number; limit: number } },
       context: GraphQLContext
     ): Promise<Message[]> => {
-      if (!context.session) handleResolverError(ERROR_STATUS.UNAUTHENTICATED);
+      if (!context.session) handleResolverError(ErrorCode.UNAUTHENTICATED);
 
-      const { session, prisma } = context;
-      const { user: currentUser } = session;
+      const { prisma } = context;
 
-      const userInConversation = await prisma.conversation.findUnique({
-        where: {
-          id: conversationId,
-          participantIds: {
-            has: currentUser?.id,
-          },
-        },
-        select: {
-          id: true,
-        },
-      });
+      const isUserInConversation = await checkUserInConversation(
+        conversationId,
+        context
+      );
 
-      if (!userInConversation)
+      if (!isUserInConversation)
         handleResolverError({
           message: "You are not member of conversation!",
           code: "FORBIDDEN",
@@ -110,7 +103,7 @@ const resolvers = {
         });
 
       try {
-        const rawConversationMessage = await prisma.conversation.aggregateRaw({
+        const rawConversationMessages = await prisma.conversation.aggregateRaw({
           pipeline: [
             { $match: { _id: { $oid: conversationId } } },
             { $unwind: "$messages" },
@@ -122,12 +115,12 @@ const resolvers = {
           ],
         });
 
-        const conversationMessage = convertRawData(rawConversationMessage);
+        const conversationMessage = convertRawData(rawConversationMessages);
         const messages = conversationMessage?.[0]?.messages;
 
         return messages ? messages : [];
       } catch (error) {
-        handleResolverError(ERROR_STATUS.INTERNAL_SERVER);
+        handleResolverError(ErrorCode.INTERNAL_SERVER);
       }
     },
 
@@ -135,17 +128,29 @@ const resolvers = {
       _: any,
       { conversationId }: { conversationId: string },
       context: GraphQLContext
-    ): Promise<RetrieveConversationResponse> => {
-      if (!context.session) handleResolverError(ERROR_STATUS.UNAUTHENTICATED);
+    ): Promise<Conversation> => {
+      if (!context.session) handleResolverError(ErrorCode.UNAUTHENTICATED);
 
       if (!conversationId.trim())
         handleResolverError({
           message: "Require conversationId",
           code: "BAD_REQUEST",
-          status: ERROR_STATUS.BAD_REQUEST,
+          status: ErrorCode.BAD_REQUEST,
         });
 
       const { prisma } = context;
+
+      const isUserInConversation = await checkUserInConversation(
+        conversationId,
+        context
+      );
+
+      if (!isUserInConversation)
+        handleResolverError({
+          message: "You are not member of conversation!",
+          code: "FORBIDDEN",
+          status: 403,
+        });
 
       try {
         const conversation = prisma.conversation.findUnique({
@@ -163,14 +168,14 @@ const resolvers = {
             },
             name: true,
             image: true,
-            userHaveSeen: true,
+            userIdsHaveSeen: true,
             createdBy: true,
           },
         });
 
         return conversation;
       } catch (error) {
-        handleResolverError(ERROR_STATUS.INTERNAL_SERVER);
+        handleResolverError(ErrorCode.INTERNAL_SERVER);
       }
     },
   },
@@ -180,21 +185,22 @@ const resolvers = {
       _: any,
       { listUserId }: { listUserId: string[] },
       context: GraphQLContext
-    ): Promise<ConversationCreatedResponse> => {
-      if (!context?.session) handleResolverError(ERROR_STATUS.UNAUTHENTICATED);
+    ): Promise<CreateConversationResponse> => {
+      if (!context?.session) handleResolverError(ErrorCode.UNAUTHENTICATED);
 
       const { session, prisma } = context;
-      const currentUser = session.user;
+      const user = session.user;
 
       const createConversationAction: {
         [condition: string]: (
-          listId: string[]
-        ) => Promise<ConversationCreatedResponse>;
+          listId: string[],
+          userId: string
+        ) => Promise<CreateConversationResponse>;
       } = {
-        ["TRUE"]: async (listId: string[]) => {
+        ["TRUE"]: async (listId: string[], userId: string) => {
           const _conversation = await prisma.conversation.create({
             data: {
-              createdBy: currentUser.id,
+              createdBy: userId,
               participants: {
                 connect: listId.map((userId) => ({ id: userId })),
               },
@@ -211,14 +217,13 @@ const resolvers = {
               },
               name: true,
               image: true,
-              userHaveSeen: true,
               createdBy: true,
             },
           });
 
           return _conversation;
         },
-        ["FALSE"]: async (listId: string[]) => {
+        ["FALSE"]: async (listId: string[], userId: string) => {
           const _findedConversation = await prisma.conversation.findMany({
             where: {
               participantIds: {
@@ -237,7 +242,6 @@ const resolvers = {
               },
               name: true,
               image: true,
-              userHaveSeen: true,
               createdBy: true,
             },
           });
@@ -247,7 +251,7 @@ const resolvers = {
 
           const _conversation = await prisma.conversation.create({
             data: {
-              createdBy: currentUser.id,
+              createdBy: userId,
               participants: {
                 connect: listId.map((userId) => ({ id: userId })),
               },
@@ -264,7 +268,6 @@ const resolvers = {
               },
               name: true,
               image: true,
-              userHaveSeen: true,
               createdBy: true,
             },
           });
@@ -277,21 +280,21 @@ const resolvers = {
         handleResolverError({
           message: "There must be at least one person",
           code: "BAD_REQUEST",
-          status: ERROR_STATUS.BAD_REQUEST,
+          status: ErrorCode.BAD_REQUEST,
         });
 
       try {
         const participantIds = lodash.cloneDeep(listUserId);
 
-        participantIds.push(currentUser.id);
+        participantIds.push(user.id);
 
         const conversationCreated = await createConversationAction[
           String(participantIds.length > 2).toUpperCase()
-        ](participantIds);
+        ](participantIds, user.id);
 
         return conversationCreated;
       } catch (error) {
-        handleResolverError(ERROR_STATUS.INTERNAL_SERVER);
+        handleResolverError(ErrorCode.INTERNAL_SERVER);
       }
     },
 
@@ -306,25 +309,18 @@ const resolvers = {
         };
       },
       context: GraphQLContext
-    ): Promise<boolean> => {
-      if (!context?.session) handleResolverError(ERROR_STATUS.UNAUTHENTICATED);
+    ): Promise<Response> => {
+      if (!context?.session) handleResolverError(ErrorCode.UNAUTHENTICATED);
 
       const { session, prisma, pubSub } = context;
-      const currentUser = session?.user;
+      const user = session?.user;
 
-      const userInConversation = await prisma.conversation.findUnique({
-        where: {
-          id: conversationId,
-          participantIds: {
-            has: currentUser?.id,
-          },
-        },
-        select: {
-          id: true,
-        },
-      });
+      const isUserInConversation = await checkUserInConversation(
+        conversationId,
+        context
+      );
 
-      if (!userInConversation)
+      if (!isUserInConversation)
         handleResolverError({
           message: "You are not member of conversation!",
           code: "FORBIDDEN",
@@ -339,12 +335,12 @@ const resolvers = {
           data: {
             messages: {
               push: {
-                userId: currentUser?.id,
+                userId: user.id,
                 content,
               },
             },
-            userHaveSeen: {
-              set: [currentUser.id],
+            userIdsHaveSeen: {
+              set: [user.id],
             },
           },
           select: {
@@ -359,7 +355,7 @@ const resolvers = {
             messages: true,
             name: true,
             image: true,
-            userHaveSeen: true,
+            userIdsHaveSeen: true,
             createdBy: true,
           },
         });
@@ -373,124 +369,32 @@ const resolvers = {
           },
         });
 
-        pubSub.publish(SUB_EVENT_NAME.CONVERSATION_HAS_MESSAGE, {
-          conversationHasMessage: {
-            id: conversationAddedMessage.id,
-            participants: conversationAddedMessage.participants,
-            lastMessage: newMessage,
-            name: conversationAddedMessage.name,
-            image: conversationAddedMessage.image,
-            userHaveSeen: conversationAddedMessage.userHaveSeen,
-            createdBy: conversationAddedMessage.createdBy,
-          },
+        const conversationHasUpdate = {
+          ...conversationAddedMessage,
+          latestMessage: newMessage,
+        };
+
+        delete conversationHasUpdate["messages"];
+
+        pubSub.publish(SUB_EVENT_NAME.UPDATE_CONVERSATION, {
+          hasUpdateConversation: conversationHasUpdate,
         });
 
-        return true;
+        return {
+          success: true,
+        };
       } catch (error) {
-        handleResolverError(ERROR_STATUS.INTERNAL_SERVER);
+        handleResolverError(ErrorCode.INTERNAL_SERVER);
       }
 
-      return false;
-    },
-    markReadConversation: async (
-      _: any,
-      { conversationId }: { conversationId: string },
-      context: GraphQLContext
-    ): Promise<boolean> => {
-      if (!context?.session) handleResolverError(ERROR_STATUS.UNAUTHENTICATED);
-
-      const { session, prisma } = context;
-      const currentUser = session.user;
-      const isParticipant = await checkUserInConversation(
-        conversationId,
-        context
-      );
-
-      if (!isParticipant)
-        handleResolverError({
-          message: "You are not member of conversation!",
-          code: "FORBIDDEN",
-          status: 403,
-        });
-
-      try {
-        await prisma.conversation.update({
-          where: {
-            id: conversationId,
-          },
-          data: {
-            userHaveSeen: {
-              push: currentUser.id,
-            },
-          },
-        });
-
-        return true;
-      } catch (error) {
-        handleResolverError(ERROR_STATUS.INTERNAL_SERVER);
-      }
-
-      return false;
+      return {
+        success: false,
+        message: "send message fail!",
+      };
     },
   },
 
   Subscription: {
-    // conversationCreated: {
-    //   subscribe: withFilter(
-    //     (_: any, __: any, context: GraphQLContext) => {
-    //       const { pubSub } = context;
-
-    //       return pubSub.asyncIterator([SUB_EVENT_NAME.CONVERSATION_CREATED]);
-    //     },
-    //     (
-    //       payload: { conversationCreated: any },
-    //       _: any,
-    //       context: GraphQLContext
-    //     ) => {
-    //       const { session } = context;
-    //       const {
-    //         conversationCreated: { participantIds },
-    //       } = payload;
-
-    //       return participantIds.includes(session.user.id);
-    //     }
-    //   ),
-    // },
-    conversationHasMessage: {
-      subscribe: withFilter(
-        (_: any, __: any, context: GraphQLContext) => {
-          const { pubSub } = context;
-
-          return pubSub.asyncIterator([
-            SUB_EVENT_NAME.CONVERSATION_HAS_MESSAGE,
-          ]);
-        },
-        (
-          payload: {
-            conversationHasMessage: {
-              participants: Participant[];
-            };
-          },
-          _: any,
-          context: GraphQLContext
-        ) => {
-          const {
-            session: { user },
-          } = context;
-          const {
-            conversationHasMessage: { participants },
-          } = payload;
-
-          const isIncludeConversation = participants.some((element) => {
-            if (element.id === user.id) return true;
-
-            return false;
-          });
-
-          return isIncludeConversation;
-        }
-      ),
-    },
     sentMessage: {
       subscribe: withFilter(
         (_: any, __: any, context: GraphQLContext) => {
@@ -509,11 +413,33 @@ const resolvers = {
           },
           _: GraphQLContext
         ) => {
-          const {
-            sentMessage: { conversationId: conversationSentMessageId },
-          } = payload;
+          const { conversationId: conversationSentMessageId } =
+            payload.sentMessage;
 
           return conversationSentMessageId === conversationId;
+        }
+      ),
+    },
+    hasUpdateConversation: {
+      subscribe: withFilter(
+        (_: any, __: any, context: GraphQLContext) => {
+          const { pubSub } = context;
+
+          return pubSub.asyncIterator([SUB_EVENT_NAME.UPDATE_CONVERSATION]);
+        },
+        (
+          payload: { hasUpdateConversation: GetConversationsResponse },
+          __: any,
+          context: GraphQLContext
+        ) => {
+          const { participants } = payload.hasUpdateConversation;
+          const {
+            session: { user },
+          } = context;
+
+          return participants.some((participant) =>
+            participant.id === user.id ? true : false
+          );
         }
       ),
     },

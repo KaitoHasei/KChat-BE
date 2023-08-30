@@ -1,6 +1,7 @@
 import { ObjectId } from "mongodb";
-import _ from "lodash";
-import { GraphQLContext } from "../graphql";
+import lodash from "lodash";
+
+import { GraphQLContext } from "../types";
 
 export const checkUserInConversation = async (
   conversationId: string,
@@ -24,9 +25,9 @@ export const checkUserInConversation = async (
 };
 
 export const convertRawData = (data: any): any => {
-  if (_.isArray(data)) {
+  if (lodash.isArray(data)) {
     return data.map((item) => convertRawData(item));
-  } else if (_.isObject(data) && data !== null) {
+  } else if (lodash.isObject(data) && data !== null) {
     const newObj: any = {};
 
     for (const key in data) {

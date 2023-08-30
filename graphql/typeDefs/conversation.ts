@@ -1,47 +1,22 @@
-const typeDefs = `#graphql
+const conversationTypeDefs = `#graphql
     type Query {
-        getConversations: [GetConversationsResponse]
-        getConversationMessages(inputs: GetConversationMessagesInput!): [Message]
-        retrieveConversation(conversationId: String!): RetrieveConversationResponse
+        getConversations: [GetConversationsResponse]!
+        getConversationMessages(inputs: GetConversationMessagesInput!): [Message]!
+        retrieveConversation(conversationId: String!): Conversation!
     }
 
     type Mutation {
-        createConversation(listUserId: [String]!): ConversationCreatedResponse
-        sendMessage(inputs: SendMessageInput!): Boolean
-        markReadConversation(conversationId: String!): Boolean
+        createConversation(listUserId: [String]!): CreateConversationResponse!
+        sendMessage(inputs: SendMessageInput!): Response!
     }
 
     type Subscription {
-        conversationHasMessage: HasMessageResponse
-        sentMessage(conversationId: String!): SentMessageResponse
-    }
-
-    type Participant {
-        id: String
-        name: String
-        image: String
-    }
-
-    type Message {
-        userId: String
-        content: String
-        createdAt: String
-    }
-
-    type Conversation {
-        id: String
-        participantIds: [String]
-        participants: [Participant]
-        messages: [Message]
-        image: String
-        userHaveSeen: [String]
-        createdBy: String
-        createdAt: String
-        updatedAt: String
+        sentMessage(conversationId: String!): SentMessageResponse!
+        hasUpdateConversation: GetConversationsResponse!
     }
 
     input GetConversationMessagesInput {
-        conversationId: String
+        conversationId: String!
         offset: Int
         limit: Int
     }
@@ -52,47 +27,28 @@ const typeDefs = `#graphql
     }
 
     type GetConversationsResponse {
-        id: String
-        participants: [Participant]
-        lastMessage: Message
+        id: String!
+        participants: [User]!
+        latestMessage: Message
         name: String
         image: String
-        userHaveSeen: [String]
-        createdBy: String
+        userIdsHaveSeen: [String]!
+        createdBy: String!
     }
 
-    type RetrieveConversationResponse {
-        id: String
-        participants: [Participant]
+    type CreateConversationResponse {
+        id: String!
+        participantIds: [String]!
+        participants: [User]!
         name: String
         image: String
-        userHaveSeen: [String]
-        createdBy: String
-    }
-
-    type ConversationCreatedResponse {
-        id: String
-        participantIds: [String]
-        participants: [Participant]
-        name: String
-        image: String
-        createdBy: String
-    }
-
-    type HasMessageResponse {
-        id: String
-        participants: [Participant]
-        lastMessage: Message
-        name: String
-        image: String
-        userHaveSeen: [String]
-        createdBy: String
+        createdBy: String!
     }
 
     type SentMessageResponse {
-        conversationId: String
-        message: Message
+        conversationId: String!
+        message: Message!
     }
 `;
 
-export default typeDefs;
+export default conversationTypeDefs;
