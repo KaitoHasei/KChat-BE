@@ -71,3 +71,18 @@ export interface CreateConversationResponse {
   image?: string;
   createdBy: string;
 }
+
+export interface ConversationUpdated {
+  id: string;
+  participants: User[];
+  latestMessage?: Message;
+  name?: string;
+  image?: string;
+  userIdsHaveSeen: string[];
+  createdBy: string;
+}
+
+export interface HasUpdateConversationResponse {
+  conversation: ConversationUpdated;
+  actionUpdate: string;
+}

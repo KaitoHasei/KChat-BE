@@ -7,12 +7,18 @@ const conversationTypeDefs = `#graphql
 
     type Mutation {
         createConversation(listUserId: [String]!): CreateConversationResponse!
-        sendMessage(inputs: SendMessageInput!): Response!
+        sendMessage(inputs: SendMessageInput!): Boolean!
+        markAsRead(conversationId: String!): Boolean!
     }
 
     type Subscription {
         sentMessage(conversationId: String!): SentMessageResponse!
-        hasUpdateConversation: GetConversationsResponse!
+        hasUpdateConversation: HasUpdateConversationResponse!
+    }
+
+    enum ActionUpdate {
+        SENT_MESSAGE
+        MARK_READ
     }
 
     input GetConversationMessagesInput {
@@ -24,6 +30,16 @@ const conversationTypeDefs = `#graphql
     input SendMessageInput {
         conversationId: String
         content: String
+    }
+
+    type ConversationUpdated {
+        id: String!
+        participants: [User]!
+        latestMessage: Message
+        name: String
+        image: String
+        userIdsHaveSeen: [String]!
+        createdBy: String!
     }
 
     type GetConversationsResponse {
@@ -48,6 +64,11 @@ const conversationTypeDefs = `#graphql
     type SentMessageResponse {
         conversationId: String!
         message: Message!
+    }
+
+    type HasUpdateConversationResponse {
+        conversation: ConversationUpdated!,
+        actionUpdate: ActionUpdate!
     }
 `;
 

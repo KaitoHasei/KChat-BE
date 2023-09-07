@@ -10,11 +10,12 @@ import {
   GetConversationsResponse,
   CreateConversationResponse,
   GraphQLContext,
+  HasUpdateConversationResponse,
 } from "../../types";
 
 import { checkUserInConversation, convertRawData } from "../../utils/helpers";
 
-import { SUB_EVENT_NAME } from "../constants";
+import { ACTION_UPDATE_CONVERSATION, SUB_EVENT_NAME } from "../constants";
 
 const resolvers = {
   Query: {
@@ -309,7 +310,7 @@ const resolvers = {
         };
       },
       context: GraphQLContext
-    ): Promise<Response> => {
+    ): Promise<boolean> => {
       if (!context?.session) handleResolverError(ErrorCode.UNAUTHENTICATED);
 
       const { session, prisma, pubSub } = context;
@@ -362,6 +363,8 @@ const resolvers = {
 
         const newMessage = conversationAddedMessage.messages.at(-1);
 
+        lodash.set(newMessage, "createdAt", newMessage.createdAt.toUTCString());
+
         pubSub.publish(SUB_EVENT_NAME.SENT_MESSAGE, {
           sentMessage: {
             conversationId: conversationAddedMessage.id,
@@ -377,20 +380,68 @@ const resolvers = {
         delete conversationHasUpdate["messages"];
 
         pubSub.publish(SUB_EVENT_NAME.UPDATE_CONVERSATION, {
-          hasUpdateConversation: conversationHasUpdate,
+          hasUpdateConversation: {
+            conversation: conversationHasUpdate,
+            actionUpdate: ACTION_UPDATE_CONVERSATION.SENT_MESSAGE,
+          },
         });
 
-        return {
-          success: true,
-        };
+        return true;
       } catch (error) {
         handleResolverError(ErrorCode.INTERNAL_SERVER);
       }
+    },
+    markAsRead: async (
+      _: any,
+      { conversationId }: { conversationId: string },
+      context: GraphQLContext
+    ): Promise<boolean> => {
+      if (!context.session) handleResolverError(ErrorCode.UNAUTHENTICATED);
 
-      return {
-        success: false,
-        message: "send message fail!",
-      };
+      const { session, prisma, pubSub } = context;
+      const user = session?.user;
+
+      const isUserInConversation = await checkUserInConversation(
+        conversationId,
+        context
+      );
+
+      if (!isUserInConversation)
+        handleResolverError({
+          message: "You are not member of conversation!",
+          code: "FORBIDDEN",
+          status: 403,
+        });
+
+      try {
+        const conversationHasUpdate = await prisma.conversation.update({
+          select: {
+            id: true,
+            participants: true,
+            userIdsHaveSeen: true,
+            createdBy: true,
+          },
+          where: {
+            id: conversationId,
+          },
+          data: {
+            userIdsHaveSeen: {
+              push: user.id,
+            },
+          },
+        });
+
+        pubSub.publish(SUB_EVENT_NAME.UPDATE_CONVERSATION, {
+          hasUpdateConversation: {
+            conversation: conversationHasUpdate,
+            actionUpdate: ACTION_UPDATE_CONVERSATION.MARK_READ,
+          },
+        });
+
+        return true;
+      } catch (error) {
+        handleResolverError(ErrorCode.INTERNAL_SERVER);
+      }
     },
   },
 
@@ -428,11 +479,11 @@ const resolvers = {
           return pubSub.asyncIterator([SUB_EVENT_NAME.UPDATE_CONVERSATION]);
         },
         (
-          payload: { hasUpdateConversation: GetConversationsResponse },
+          payload: { hasUpdateConversation: HasUpdateConversationResponse },
           __: any,
           context: GraphQLContext
         ) => {
-          const { participants } = payload.hasUpdateConversation;
+          const { participants } = payload.hasUpdateConversation.conversation;
           const {
             session: { user },
           } = context;
