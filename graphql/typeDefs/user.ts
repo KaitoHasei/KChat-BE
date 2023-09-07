@@ -1,22 +1,11 @@
-const typeDefs = `#graphql
+const userTypeDefs = `#graphql
     type Query {
-        searchUsers(searchTerms: String!): SearchUserResponse
+        searchUsers(searchTerms: String!): [User]!
     }
 
     type Mutation {
-        changeUserName(userName: String!): SuccessResponse
-    }
-
-    type User {
-        id: String
-        name: String
-        email: String
-        image: String
-    }
-
-    type SearchUserResponse {
-        users: [User]
+        changeUserName(userName: String!): Response!
     }
 `;
 
-export default typeDefs;
+export default userTypeDefs;

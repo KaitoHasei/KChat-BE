@@ -1,4 +1,5 @@
-export * from "./types";
+export { default as typeDefs } from "./typeDefs";
+export { default as resolvers } from "./resolvers";
 
 // error handle
 export * from "./handle-errors";
