@@ -1,6 +1,6 @@
 import { GraphQLError, GraphQLFormattedError } from "graphql";
 
-interface ErrorParams {
+export interface ErrorObject {
   message: string;
   code: string;
   status: number;
@@ -58,7 +58,7 @@ const handleErrorByType: {
   },
 };
 
-export const handleResolverError = (error: number | ErrorParams) => {
+export const handleResolverError = (error: number | ErrorObject) => {
   if (typeof error !== "number")
     throw new GraphQLError(error.message, {
       extensions: {

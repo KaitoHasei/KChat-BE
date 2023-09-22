@@ -1,4 +1,5 @@
 import userTypeDefs from "./user";
+import accountTypeDefs from "./account";
 import conversationTypeDefs from "./conversation";
 
 const generalTypeDefs = `#graphql
@@ -29,6 +30,11 @@ const generalTypeDefs = `#graphql
     }
 `;
 
-const typeDefs = [generalTypeDefs, userTypeDefs, conversationTypeDefs];
+const typeDefs = [
+  generalTypeDefs,
+  userTypeDefs,
+  accountTypeDefs,
+  conversationTypeDefs,
+];
 
 export default typeDefs;

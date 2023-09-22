@@ -53,6 +53,30 @@ export interface Conversation {
   createdBy: string;
 }
 
+export interface SignUpInput {
+  username: string;
+  email: string;
+  password: string;
+}
+
+export interface SignInInput {
+  email: string;
+  password: string;
+}
+
+export interface VerifyEmailInput {
+  email: string;
+  verifyCode: string;
+}
+
+export interface SignInResponse {
+  id: string;
+  name?: string;
+  email: string;
+  image?: string;
+  accessToken: string;
+}
+
 export interface GetConversationsResponse {
   id: string;
   participants: User[];
