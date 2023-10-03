@@ -14,7 +14,7 @@ pipeline {
                 }
                 
                 withDockerRegistry(credentialsId: 'docker-hub',  url: 'https://index.docker.io/v1/') {
-                    sh 'docker build -t kaitohasei/kchat-backend-dev -f Dockerfile.dev'
+                    sh 'docker build -t kaitohasei/kchat-backend-dev -f Dockerfile.dev .'
                     sh 'docker push kaitohasei/kchat-backend-dev'
                 }
             }
