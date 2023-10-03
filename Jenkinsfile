@@ -4,6 +4,15 @@ pipeline {
     stages {
         stage('Packaging/Pushing image') {
             steps {
+                script {
+                    def secretFilePath = "${WORKSPACE}/.env"
+                    
+                    // Use the 'withCredentials' block to copy the secret file to the workspace
+                    withCredentials([file(credentialsId: 'kchat-backend-env', variable: 'ENV_FILE')]) {
+                        sh "cp ${ENV_FILE} ${secretFilePath}"
+                    }
+                }
+                
                 withDockerRegistry(credentialsId: 'docker-hub',  uri: 'https://index.docker.io/v1/') {
                     sh 'docker build -t kaitohasei/kchat-backend-dev -f Dockerfile.dev'
                     sh 'docker push kaitohasei/kchat-backend-dev'
