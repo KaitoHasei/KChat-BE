@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "compile": "tsc",
-    "start": "npm run compile && node ./dist/index.js",
+    "start": "npm run compile && node --experimental-specifier-resolution=node ./dist/index.js",
     "dev": "nodemon --exec node --experimental-specifier-resolution=node --loader ts-node/esm index.ts",
     "dev-wsl": "nodemon -L --exec node --experimental-specifier-resolution=node --loader ts-node/esm index.ts"
   },
@@ -26,7 +26,6 @@
     "jsonwebtoken": "^9.0.2",
     "lodash": "^4.17.21",
     "mongodb": "^5.6.0",
-    "next-auth": "^4.22.1",
     "node-fetch": "^3.3.1",
     "ws": "^8.13.0"
   },

@@ -1,4 +1,3 @@
-import { ISODateString } from "next-auth";
 import { Context } from "graphql-ws";
 import { PubSub } from "graphql-subscriptions";
 import { PrismaClient } from "@prisma/client";
@@ -10,7 +9,7 @@ export interface Session {
     email?: string | null;
     image?: string | null;
   };
-  expires?: ISODateString;
+  expires?: string;
 }
 
 export interface GraphQLContext {

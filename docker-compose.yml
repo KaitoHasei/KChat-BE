@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  kchat-backend:
+    build: .
+    ports:
+      - "8080:8080"
+  nginx:
+    build:
+      context: ./nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - kchat-backend
