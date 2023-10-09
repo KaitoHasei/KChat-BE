@@ -2,6 +2,7 @@ pipeline {
     agent any
 
     environment {
+        PRIVATE_KEY = credentials('kchat-backend-key')
         AUTH_SESSION_URL = credentials('AUTH_SESSION_URL')
         SALT = credentials('SALT')
         TOKEN_SECRET = credentials('TOKEN_SECRET')
@@ -12,16 +13,17 @@ pipeline {
         stage('Packaging/Pushing image') {
             steps {
                 withDockerRegistry(credentialsId: 'docker-hub',  url: 'https://index.docker.io/v1/') {
-                    sh 'docker build -t kaitohasei/kchat-backend-dev -f Dockerfile.dev .'
-                    sh 'docker push kaitohasei/kchat-backend-dev'
+                    sh 'docker build -t kaitohasei/kchat-backend -f Dockerfile .'
+                    sh 'docker push kaitohasei/kchat-backend'
                 }
             }
         }
 
-        stage('Deploy Dev environment') {
+        stage('Deploy') {
             steps {
-                sh 'docker pull kaitohasei/kchat-backend-dev'
-                sh 'docker run -d -p 4000:4000 --name kchat-backend-dev kaitohasei/kchat-backend-dev'
+                sh 'ssh -i ${PRIVATE_KEY} ubuntu@ec2-18-141-143-159.ap-southeast-1.compute.amazonaws.com'
+                sh 'docker pull kaitohasei/kchat-backend'
+                sh 'docker run -d -p 80:4000 --name kchat-backend kaitohasei/kchat-backend'
             }
         }
     }

@@ -130,3 +130,5 @@ dist
 .pnp.*
 
 nginx/
+hosts
+playbook.yml
