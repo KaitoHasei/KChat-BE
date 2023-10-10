@@ -22,10 +22,10 @@ pipeline {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'kchat-backend-ec2', keyFileVariable: 'SSH_KEY', usernameVariable: 'REMOTE_SERVER')]) {
                     sh '''
-                        ssh -tt -o StrictHostKeyChecking=no -i $SSH_KEY $REMOTE_SERVER << EOF
-                        docker pull kaitohasei/kchat-backend;
-                        docker container stop kaitohasei/kchat-backend || echo "This Container does not exist";
-                        echo y | docker container prune ;
+                        ssh -tt -o StrictHostKeyChecking=no -i $SSH_KEY $REMOTE_SERVER << 'EOF'
+                        docker pull kaitohasei/kchat-backend
+                        docker container stop kaitohasei/kchat-backend || echo "This Container does not exist"
+                        echo y | docker container prune 
                         docker run -d -p 80:4000 --name kchat-backend kaitohasei/kchat-backend
                         EOF
                     '''
