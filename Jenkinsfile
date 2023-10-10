@@ -21,9 +21,9 @@ pipeline {
         stage('Deploy') {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'kchat-backend-ec2', keyFileVariable: 'SSH_KEY', usernameVariable: 'REMOTE_SERVER')]) {
-                    sh 'ssh -i $SSH_KEY $REMOTE_SERVER'
-                    sh 'docker pull kaitohasei/kchat-backend'
-                    sh 'docker run -d -p 80:4000 --name kchat-backend kaitohasei/kchat-backend'
+                    sh '''
+                        ssh -tt -i $SSH_KEY $REMOTE_SERVER "docker pull kaitohasei/kchat-backend && docker run -d -p 80:4000 --name kchat-backend kaitohasei/kchat-backend"
+                    '''
                 }
             }
         }
