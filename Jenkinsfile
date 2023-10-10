@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        PRIVATE_KEY = credentials('kchat-backend-key')
         AUTH_SESSION_URL = credentials('AUTH_SESSION_URL')
         SALT = credentials('SALT')
         TOKEN_SECRET = credentials('TOKEN_SECRET')
@@ -21,9 +20,11 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                sh 'ssh -i ${PRIVATE_KEY} ubuntu@ec2-18-141-143-159.ap-southeast-1.compute.amazonaws.com'
-                sh 'docker pull kaitohasei/kchat-backend'
-                sh 'docker run -d -p 80:4000 --name kchat-backend kaitohasei/kchat-backend'
+                withCredentials([sshUserPrivateKey(credentialsId: 'kchat-backend-ec2', keyFileVariable: 'SSH_KEY', usernameVariable: 'REMOTE_SERVER')]) {
+                    sh 'ssh -i $SSH_KEY $REMOTE_SERVER'
+                    sh 'docker pull kaitohasei/kchat-backend'
+                    sh 'docker run -d -p 80:4000 --name kchat-backend kaitohasei/kchat-backend'
+                }
             }
         }
     }
